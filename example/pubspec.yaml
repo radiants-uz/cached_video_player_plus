@@ -5,7 +5,7 @@ description: "Demonstrates how to use the cached_video_player_plus package."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
 environment:
-  sdk: ^3.8.1
+  sdk: ^3.0.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -21,7 +21,7 @@ dependencies:
     # The example app is bundled with the plugin so we use a path dependency on
     # the parent directory to use the current plugin's version.
     path: ../
-  chewie: ^1.12.1
+  chewie: ^1.11.3
   flutter:
     sdk: flutter
   flutter_cache_manager: ^3.4.1
@@ -30,17 +30,8 @@ dependencies:
   shared_preferences: ^2.5.3
   video_player: ^2.10.0
   video_player_media_kit: ^1.0.6
-
-dependency_overrides:
-  flutter_cache_manager:
-    git:
-      url: https://github.com/Baseflow/flutter_cache_manager.git
-      path: flutter_cache_manager
-      ref: 54904e499a06d0364a2b3f4ca9789e5f829f1879
-  get_storage:
-    git:
-      url: https://github.com/OutdatedGuy/get_storage.git
-      ref: rewrite
+  # TODO(OutdatedGuy): Remove after v6.0.0 migration period
+  get_storage: ^2.1.1
 
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to
@@ -48,7 +39,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

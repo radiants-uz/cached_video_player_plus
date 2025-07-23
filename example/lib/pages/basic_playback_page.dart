@@ -24,7 +24,7 @@ class _BasicPlaybackPageState extends State<BasicPlaybackPage> {
       Uri.parse(
         'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
       ),
-      invalidateCacheIfOlderThan: const Duration(days: 42),
+      invalidateCacheIfOlderThan: const Duration(seconds: 10),
     );
     _player.initialize().then((_) {
       if (!mounted) return;

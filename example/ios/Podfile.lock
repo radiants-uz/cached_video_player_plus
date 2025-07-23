@@ -54,14 +54,14 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
-  media_kit_video: f3b0d035d89def15cfbbcf7dc2ae278f201e2f83
-  package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
-  path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
-  shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
-  sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
-  video_player_avfoundation: 2cef49524dd1f16c5300b9cd6efd9611ce03639b
-  volume_controller: 3657a1f65bedb98fa41ff7dc5793537919f31b12
-  wakelock_plus: e29112ab3ef0b318e58cfa5c32326458be66b556
+  media_kit_video: 26c5b265a4094a2df3e8d41e6724d9b964c13151
+  package_info_plus: c0502532a26c7662a62a356cebe2692ec5fe4ec4
+  path_provider_foundation: 2b6b4c569c0fb62ec74538f866245ac84301af46
+  shared_preferences_foundation: fcdcbc04712aee1108ac7fda236f363274528f78
+  sqflite_darwin: 5a7236e3b501866c1c9befc6771dfd73ffb8702d
+  video_player_avfoundation: 7c6c11d8470e1675df7397027218274b6d2360b3
+  volume_controller: 2e3de73d6e7e81a0067310d17fb70f2f86d71ac7
+  wakelock_plus: 76957ab028e12bfa4e66813c99e46637f367fc7e
 
 PODFILE CHECKSUM: 6e700dec67e6deac9b1c69bb14c49a2217a12d15
 

@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:developer' as dev;
 
+import 'package:cached_video_player_plus/src/real_data_source.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:uuid/v4.dart';
 import 'package:video_player/video_player.dart';
 
 import 'cache_key_helpers.dart';
@@ -29,6 +33,8 @@ import 'video_player_storage.dart';
 ///
 /// [flutter_cache_manager]: https://pub.dev/packages/flutter_cache_manager
 class CachedVideoPlayerPlus {
+  static bool enableLogger = kDebugMode;
+
   /// Constructs a [CachedVideoPlayerPlus] playing a video from an asset.
   ///
   /// The name of the asset is given by the [dataSource] argument and must not
@@ -53,7 +59,9 @@ class CachedVideoPlayerPlus {
         invalidateCacheIfOlderThan = Duration.zero,
         skipCache = true,
         _cacheKey = '',
-        _cacheManager = _defaultCacheManager;
+        _cacheManager = _defaultCacheManager {
+    _logCreate();
+  }
 
   /// Constructs a [CachedVideoPlayerPlus] playing a video from a network URL.
   ///
@@ -103,7 +111,9 @@ class CachedVideoPlayerPlus {
         _cacheKey = cacheKey != null
             ? getCustomCacheKey(cacheKey)
             : getCacheKey(url.toString()),
-        _cacheManager = cacheManager ?? _defaultCacheManager;
+        _cacheManager = cacheManager ?? _defaultCacheManager {
+    _logCreate();
+  }
 
   /// Constructs a [CachedVideoPlayerPlus] playing a video from a file.
   ///
@@ -126,7 +136,9 @@ class CachedVideoPlayerPlus {
         invalidateCacheIfOlderThan = Duration.zero,
         skipCache = true,
         _cacheKey = '',
-        _cacheManager = _defaultCacheManager;
+        _cacheManager = _defaultCacheManager {
+    _logCreate();
+  }
 
   /// Constructs a [CachedVideoPlayerPlus] playing a video from a contentUri.
   ///
@@ -152,7 +164,15 @@ class CachedVideoPlayerPlus {
         invalidateCacheIfOlderThan = Duration.zero,
         skipCache = true,
         _cacheKey = '',
-        _cacheManager = _defaultCacheManager;
+        _cacheManager = _defaultCacheManager {
+    _logCreate();
+  }
+
+  void _logCreate() {
+    log('create player: $id');
+  }
+
+  final String id = UuidV4().generate();
 
   /// The URI to the video file. This will be in different formats depending on
   /// the [DataSourceType] of the original video.
@@ -210,6 +230,10 @@ class CachedVideoPlayerPlus {
   /// identify the cached video file.
   final String _cacheKey;
 
+  bool _isInitialized = true;
+
+  bool get isInitialized => _isInitialized;
+
   /// The [CacheManager] instance used for caching video files.
   ///
   /// This is used to manage cached video files, including downloading,
@@ -229,23 +253,15 @@ class CachedVideoPlayerPlus {
   /// Throws an [StateError] if the controller is not initialized. Always call
   /// [initialize] before accessing this property.
   VideoPlayerController get controller {
-    if (!_isInitialized) {
+    try {
+      return _videoPlayerController;
+    } catch (e) {
       throw StateError(
         'CachedVideoPlayerPlus is not initialized. '
         'Call initialize() before accessing the controller.',
       );
     }
-    return _videoPlayerController;
   }
-
-  /// Whether the [CachedVideoPlayerPlus] instance is initialized.
-  bool _isInitialized = false;
-
-  /// Returns true if the [CachedVideoPlayerPlus] instance is initialized.
-  ///
-  /// This getter indicates whether [initialize] has been successfully called
-  /// and the video player is ready for use.
-  bool get isInitialized => _isInitialized;
 
   /// Returns true if caching is supported and [skipCache] is false.
   ///
@@ -261,25 +277,11 @@ class CachedVideoPlayerPlus {
   /// Default storage for cache metadata and expiration timestamps.
   static final _storage = VideoPlayerStorage();
 
-  /// Initializes the video player and sets up caching if applicable.
-  ///
-  /// This method must be called before accessing the [controller] or playing
-  /// the video. It handles cache checking, file downloading, and creates the
-  /// appropriate [VideoPlayerController] based on the data source type.
-  ///
-  /// For network videos, it checks if a cached version exists and whether it
-  /// has expired based on [invalidateCacheIfOlderThan]. If no cache exists or
-  /// the cache is expired, it downloads the video in the background.
-  ///
-  /// Returns a [Future] that completes when initialization is finished.
-  Future<void> initialize() async {
-    if (_isInitialized) {
-      if (kDebugMode) {
-        debugPrint('CachedVideoPlayerPlus is already initialized.');
-      }
-      return;
-    }
+  bool _initializeCancelled = false;
 
+  Completer<VideoPlayerController>? _checkCacheCompleter;
+
+  Future<RealDataSource> _prepareRealDataSource() async {
     late String realDataSource;
     bool isCacheAvailable = false;
 
@@ -347,9 +349,21 @@ class CachedVideoPlayerPlus {
       realDataSource = dataSource;
     }
 
-    _videoPlayerController = switch (dataSourceType) {
+    return RealDataSource(
+      datasource: realDataSource,
+      originalDatasource: dataSource,
+      isCacheAvailable: isCacheAvailable,
+    );
+  }
+
+  VideoPlayerController _prepareVideoController(
+    RealDataSource realDatasource,
+  ) {
+    final datasource = realDatasource.datasource;
+    final isCacheAvailable = realDatasource.isCacheAvailable;
+    return switch (dataSourceType) {
       DataSourceType.asset => VideoPlayerController.asset(
-          realDataSource,
+          datasource,
           package: package,
           closedCaptionFile: closedCaptionFile,
           videoPlayerOptions: videoPlayerOptions,
@@ -357,7 +371,7 @@ class CachedVideoPlayerPlus {
         ),
       DataSourceType.network when !isCacheAvailable =>
         VideoPlayerController.networkUrl(
-          Uri.parse(realDataSource),
+          Uri.parse(datasource),
           formatHint: formatHint,
           closedCaptionFile: closedCaptionFile,
           videoPlayerOptions: videoPlayerOptions,
@@ -365,32 +379,99 @@ class CachedVideoPlayerPlus {
           viewType: viewType,
         ),
       DataSourceType.contentUri => VideoPlayerController.contentUri(
-          Uri.parse(realDataSource),
+          Uri.parse(datasource),
           closedCaptionFile: closedCaptionFile,
           videoPlayerOptions: videoPlayerOptions,
           viewType: viewType,
         ),
       _ => VideoPlayerController.file(
-          File(realDataSource),
+          File(datasource),
           closedCaptionFile: closedCaptionFile,
           videoPlayerOptions: videoPlayerOptions,
           httpHeaders: httpHeaders,
           viewType: viewType,
         ),
     };
+  }
 
-    return _videoPlayerController.initialize().then((_) {
-      _isInitialized = true;
-    });
+  Future<VideoPlayerController> _checkCache() async {
+    final realDataSource = await _prepareRealDataSource();
+    final controller = _prepareVideoController(realDataSource);
+    return controller;
+  }
+
+  /// Initializes the video player and sets up caching if applicable.
+  ///
+  /// This method must be called before accessing the [controller] or playing
+  /// the video. It handles cache checking, file downloading, and creates the
+  /// appropriate [VideoPlayerController] based on the data source type.
+  ///
+  /// For network videos, it checks if a cached version exists and whether it
+  /// has expired based on [invalidateCacheIfOlderThan]. If no cache exists or
+  /// the cache is expired, it downloads the video in the background.
+  ///
+  /// Returns a [Future] that completes when initialization is finished.
+  Future<VideoPlayerController?> initialize({
+    void Function(VideoPlayerController controller)? onControllerCreate,
+    void Function(Object object, StackTrace stackTrace)? onCacheError,
+  }) async {
+    _initializeCancelled = false;
+    final checkCompleter = Completer<VideoPlayerController>();
+    _checkCacheCompleter = checkCompleter;
+    try {
+      log('checking cache: $id');
+      final controller = await _checkCache();
+      _videoPlayerController = controller;
+      if (_initializeCancelled) {
+        log('initialize skipped: $id');
+        checkCompleter.complete(controller);
+        return null;
+      }
+      final initializeFuture = controller.initialize()
+        ..then(
+          (value) {
+            _isInitialized = true;
+          },
+        );
+      checkCompleter.complete(controller);
+      onControllerCreate?.call(controller);
+      await initializeFuture;
+      return controller;
+    } catch (e, stk) {
+      onCacheError?.call(e, stk);
+      checkCompleter.completeError(e, stk);
+      return null;
+    }
+  }
+
+  void log([Object? message]) {
+    if (enableLogger) {
+      dev.log(message.toString(), name: 'CachedVideoPlayerPlus');
+    }
   }
 
   /// Disposes of the video player and releases resources.
   ///
   /// Call this method when the video player is no longer needed to free up
   /// resources and prevent memory leaks.
-  void dispose() {
-    if (_isInitialized) {
-      _videoPlayerController.dispose();
+  Future<void> dispose() async {
+    try {
+      final completer = _checkCacheCompleter;
+      if (completer != null) {
+        if (!completer.isCompleted) {
+          _initializeCancelled = true;
+        }
+        final controller = await completer.future;
+
+        log('disposing${_initializeCancelled ? ' cancelled' : ''} controller $id');
+        await controller.dispose().then(
+          (value) {
+            log('dispose controller complete $id');
+          },
+        );
+      }
+    } catch (e) {
+      log('dispose error: $e');
     }
   }
 

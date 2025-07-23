@@ -1,9 +1,9 @@
 import 'package:cached_video_player_plus/util/migration_utils.dart';
+import 'package:cached_video_player_plus_example/pages/basic_example_page.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player_media_kit/video_player_media_kit.dart';
 
 import 'pages/advance_cache_management_page.dart';
-import 'pages/basic_playback_page.dart';
 import 'pages/chewie_integration_page.dart';
 import 'pages/pre_caching_page.dart';
 
@@ -78,9 +78,8 @@ class HomePage extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final crossAxisCount = constraints.maxWidth > 700 ? 2 : 1;
-                    final childAspectRatio = constraints.maxWidth > 1000
-                        ? 4.5
-                        : 3.14;
+                    final childAspectRatio =
+                        constraints.maxWidth > 1000 ? 4.5 : 3.14;
 
                     return GridView.count(
                       crossAxisCount: crossAxisCount,
@@ -95,7 +94,7 @@ class HomePage extends StatelessWidget {
                           icon: Icons.play_circle,
                           color: Colors.blue,
                           onTap: () =>
-                              _navigateTo(context, const BasicPlaybackPage()),
+                              _navigateTo(context, const BasicExamplePage()),
                         ),
                         _FeatureCard(
                           title: 'Chewie Integration',
@@ -189,8 +188,8 @@ class _FeatureCard extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     Text(
