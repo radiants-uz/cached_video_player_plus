@@ -18,6 +18,13 @@ class _BasicExamplePageState extends State<BasicExamplePage> {
   void initState() {
     super.initState();
     _initialize();
+    Future.microtask(
+      () {
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+    );
   }
 
   Future<void> _initialize() async {
@@ -26,16 +33,16 @@ class _BasicExamplePageState extends State<BasicExamplePage> {
         'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
       ),
     );
-    final controller = await _player.initialize(
+    await _player.initialize(
       onControllerCreate: (controller) {
         setState(() {
           _controller = controller;
         });
       },
+      onControllerInitialized: (controller) {
+        controller.play();
+      },
     );
-    if (controller != null) {
-      controller.play();
-    }
   }
 
   @override

@@ -281,6 +281,8 @@ class CachedVideoPlayerPlus {
 
   Completer<VideoPlayerController>? _checkCacheCompleter;
 
+  Completer<void>? _initializationCompleter;
+
   Future<RealDataSource> _prepareRealDataSource() async {
     late String realDataSource;
     bool isCacheAvailable = false;
@@ -411,36 +413,48 @@ class CachedVideoPlayerPlus {
   /// the cache is expired, it downloads the video in the background.
   ///
   /// Returns a [Future] that completes when initialization is finished.
-  Future<VideoPlayerController?> initialize({
+  Future<void> initialize({
     void Function(VideoPlayerController controller)? onControllerCreate,
     void Function(Object object, StackTrace stackTrace)? onCacheError,
+    void Function(VideoPlayerController controller)? onControllerInitialized,
+    void Function(Object error, StackTrace stackTrace)? onInitializationError,
   }) async {
     _initializeCancelled = false;
     final checkCompleter = Completer<VideoPlayerController>();
     _checkCacheCompleter = checkCompleter;
+    final initializeCompleter = Completer<void>();
     try {
       log('checking cache: $id');
       final controller = await _checkCache();
       _videoPlayerController = controller;
       if (_initializeCancelled) {
-        log('initialize skipped: $id');
+        log('cache and initialization skipped: $id');
         checkCompleter.complete(controller);
-        return null;
+        return;
       }
-      final initializeFuture = controller.initialize()
-        ..then(
-          (value) {
-            _isInitialized = true;
-          },
-        );
+
+      _initializationCompleter = initializeCompleter;
+      final initializeFuture = controller.initialize();
       checkCompleter.complete(controller);
       onControllerCreate?.call(controller);
       await initializeFuture;
-      return controller;
+      initializeCompleter.complete();
+      if (_initializeCancelled) {
+        log('initialize skipped: $id');
+      } else {
+        onControllerInitialized?.call(controller);
+      }
+      _isInitialized = true;
     } catch (e, stk) {
-      onCacheError?.call(e, stk);
-      checkCompleter.completeError(e, stk);
-      return null;
+      if (!checkCompleter.isCompleted) {
+        log('cache check error $id: $e');
+        onCacheError?.call(e, stk);
+        checkCompleter.completeError(e, stk);
+      } else if (!initializeCompleter.isCompleted) {
+        log('initialization error $id: $e');
+        onInitializationError?.call(e, stk);
+        initializeCompleter.completeError(e, stk);
+      }
     }
   }
 
@@ -456,6 +470,11 @@ class CachedVideoPlayerPlus {
   /// resources and prevent memory leaks.
   Future<void> dispose() async {
     try {
+      final initializationCompleter = _initializationCompleter;
+      if (initializationCompleter != null &&
+          !initializationCompleter.isCompleted) {
+        _initializeCancelled = true;
+      }
       final completer = _checkCacheCompleter;
       if (completer != null) {
         if (!completer.isCompleted) {
@@ -471,7 +490,7 @@ class CachedVideoPlayerPlus {
         );
       }
     } catch (e) {
-      log('dispose error: $e');
+      log('dispose error $id: $e');
     }
   }
 
