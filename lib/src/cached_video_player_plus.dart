@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:developer' as dev;
 
+import 'package:cached_video_player_plus/src/custom_video_controller.dart';
 import 'package:cached_video_player_plus/src/real_data_source.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -364,7 +365,7 @@ class CachedVideoPlayerPlus {
     final datasource = realDatasource.datasource;
     final isCacheAvailable = realDatasource.isCacheAvailable;
     return switch (dataSourceType) {
-      DataSourceType.asset => VideoPlayerController.asset(
+      DataSourceType.asset => CustomVideoPlayerController.asset(
           datasource,
           package: package,
           closedCaptionFile: closedCaptionFile,
@@ -372,7 +373,7 @@ class CachedVideoPlayerPlus {
           viewType: viewType,
         ),
       DataSourceType.network when !isCacheAvailable =>
-        VideoPlayerController.networkUrl(
+        CustomVideoPlayerController.networkUrl(
           Uri.parse(datasource),
           formatHint: formatHint,
           closedCaptionFile: closedCaptionFile,
@@ -380,13 +381,13 @@ class CachedVideoPlayerPlus {
           httpHeaders: httpHeaders,
           viewType: viewType,
         ),
-      DataSourceType.contentUri => VideoPlayerController.contentUri(
+      DataSourceType.contentUri => CustomVideoPlayerController.contentUri(
           Uri.parse(datasource),
           closedCaptionFile: closedCaptionFile,
           videoPlayerOptions: videoPlayerOptions,
           viewType: viewType,
         ),
-      _ => VideoPlayerController.file(
+      _ => CustomVideoPlayerController.file(
           File(datasource),
           closedCaptionFile: closedCaptionFile,
           videoPlayerOptions: videoPlayerOptions,
