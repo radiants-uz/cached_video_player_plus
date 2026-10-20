@@ -685,6 +685,23 @@ class CachedVideoPlayerPlus {
     await Future.wait([cacheManager.emptyCache(), _storage.erase()]);
   }
 
+  /// Sets how many videos the default cache keeps and how long an unplayed
+  /// one stays, instead of [VideoCacheManager.defaultMaxNrOfCacheObjects]
+  /// (40) and [VideoCacheManager.defaultStalePeriod] (7 days).
+  ///
+  /// Call it before the first player is created: the cache is set up then,
+  /// and later calls return false and change nothing. Players given their
+  /// own `cacheManager` are not affected.
+  static bool configureDefaultCache({
+    int? maxNrOfCacheObjects,
+    Duration? stalePeriod,
+  }) {
+    return VideoCacheManager.configure(
+      maxNrOfCacheObjects: maxNrOfCacheObjects,
+      stalePeriod: stalePeriod,
+    );
+  }
+
   /// Pre-caches a video file from the specified [url].
   ///
   /// This method can be used to pre-cache videos before they are played,
