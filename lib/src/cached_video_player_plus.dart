@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:developer' as dev;
 
+import 'package:cached_video_player_plus/src/cache_download.dart';
 import 'package:cached_video_player_plus/src/custom_video_controller.dart';
 import 'package:cached_video_player_plus/src/real_data_source.dart';
 import 'package:flutter/foundation.dart';
@@ -59,6 +60,7 @@ class CachedVideoPlayerPlus {
         _authHeaders = const <String, String>{},
         invalidateCacheIfOlderThan = Duration.zero,
         skipCache = true,
+        cacheAfterPlaying = Duration.zero,
         _cacheKey = '',
         _cacheManager = _defaultCacheManager {
     _logCreate();
@@ -86,6 +88,13 @@ class CachedVideoPlayerPlus {
   ///
   /// Set [skipCache] to true to bypass caching and always use the network.
   ///
+  /// When the video is not cached yet it streams from the network, and a
+  /// copy for the cache is downloaded beside it once the video has been
+  /// playing for [cacheAfterPlaying] (or has played to its end), so a video
+  /// the user skips sooner is not downloaded twice. Disposing the player
+  /// cancels that download. [Duration.zero] starts it as soon as the player
+  /// is created, as this package used to.
+  ///
   /// The [cacheKey] parameter allows specifying a custom cache key for
   /// caching operations. If not provided, a default key based on the URL will
   /// be used.
@@ -105,6 +114,7 @@ class CachedVideoPlayerPlus {
     this.skipCache = false,
     String? cacheKey,
     CacheManager? cacheManager,
+    this.cacheAfterPlaying = const Duration(seconds: 3),
   })  : dataSource = url.toString(),
         dataSourceType = DataSourceType.network,
         package = null,
@@ -136,6 +146,7 @@ class CachedVideoPlayerPlus {
         _authHeaders = const <String, String>{},
         invalidateCacheIfOlderThan = Duration.zero,
         skipCache = true,
+        cacheAfterPlaying = Duration.zero,
         _cacheKey = '',
         _cacheManager = _defaultCacheManager {
     _logCreate();
@@ -164,6 +175,7 @@ class CachedVideoPlayerPlus {
         _authHeaders = const <String, String>{},
         invalidateCacheIfOlderThan = Duration.zero,
         skipCache = true,
+        cacheAfterPlaying = Duration.zero,
         _cacheKey = '',
         _cacheManager = _defaultCacheManager {
     _logCreate();
@@ -227,6 +239,10 @@ class CachedVideoPlayerPlus {
   /// If set to true, it will skip the cache and use the video from the network.
   final bool skipCache;
 
+  /// How long a video that is not cached yet must play before its copy for
+  /// the cache starts downloading. See [CachedVideoPlayerPlus.networkUrl].
+  final Duration cacheAfterPlaying;
+
   /// The cache key used for caching operations. This is used to uniquely
   /// identify the cached video file.
   final String _cacheKey;
@@ -280,6 +296,104 @@ class CachedVideoPlayerPlus {
 
   bool _initializeCancelled = false;
 
+  bool _disposed = false;
+
+  /// Whether the video was not in the cache when the player was set up.
+  bool _cacheMissed = false;
+
+  /// The controller watched for [cacheAfterPlaying], until it is reached.
+  VideoPlayerController? _cacheWatchedController;
+
+  /// Time spent playing while [_cacheWatchedController] is watched.
+  final Stopwatch _playedBeforeCaching = Stopwatch();
+
+  Timer? _cacheTimer;
+
+  CacheDownload? _cacheDownload;
+
+  /// Downloads the copy for the cache once [cacheAfterPlaying] has played.
+  void _scheduleCaching(VideoPlayerController controller) {
+    if (!_cacheMissed || _disposed) {
+      return;
+    }
+    _stopCaching();
+    if (cacheAfterPlaying <= Duration.zero) {
+      _startCacheDownload();
+      return;
+    }
+    _cacheWatchedController = controller;
+    controller.addListener(_onPlaybackForCaching);
+    _onPlaybackForCaching();
+  }
+
+  void _onPlaybackForCaching() {
+    final controller = _cacheWatchedController;
+    if (controller == null) {
+      return;
+    }
+    final value = controller.value;
+    if (value.isCompleted) {
+      _startCacheDownload();
+      return;
+    }
+    if (value.isPlaying && !_playedBeforeCaching.isRunning) {
+      _playedBeforeCaching.start();
+      _cacheTimer?.cancel();
+      _cacheTimer = Timer(
+        cacheAfterPlaying - _playedBeforeCaching.elapsed,
+        _startCacheDownload,
+      );
+    } else if (!value.isPlaying && _playedBeforeCaching.isRunning) {
+      _playedBeforeCaching.stop();
+      _cacheTimer?.cancel();
+      _cacheTimer = null;
+    }
+  }
+
+  void _stopWatchingForCaching() {
+    _cacheTimer?.cancel();
+    _cacheTimer = null;
+    _playedBeforeCaching
+      ..stop()
+      ..reset();
+    _cacheWatchedController?.removeListener(_onPlaybackForCaching);
+    _cacheWatchedController = null;
+  }
+
+  void _startCacheDownload() {
+    _stopWatchingForCaching();
+    if (_disposed || _cacheDownload != null) {
+      return;
+    }
+    log('caching: $id');
+    final download = _cacheDownload = CacheDownload.start(
+      url: dataSource,
+      cacheKey: _cacheKey,
+      headers: _authHeaders,
+      cacheManager: _cacheManager,
+      maxAge: invalidateCacheIfOlderThan,
+    );
+    download.done.then((cached) {
+      if (!cached) {
+        return;
+      }
+      _storage.write(
+        _cacheKey,
+        DateTime.timestamp().millisecondsSinceEpoch,
+      );
+      if (kDebugMode) {
+        debugPrint('Cached video [$dataSource] successfully.');
+      }
+    });
+  }
+
+  /// Stops waiting to cache, and lets go of a cache download in progress.
+  void _stopCaching() {
+    _stopWatchingForCaching();
+    _cacheDownload?.release();
+    _cacheDownload = null;
+  }
+
   Completer<VideoPlayerController>? _checkCacheCompleter;
 
   Completer<void>? _initializationCompleter;
@@ -331,17 +445,8 @@ class CachedVideoPlayerPlus {
       }
 
       if (cachedFile == null) {
-        _cacheManager
-            .downloadFile(dataSource, authHeaders: _authHeaders, key: _cacheKey)
-            .then((_) {
-          _storage.write(
-            _cacheKey,
-            DateTime.timestamp().millisecondsSinceEpoch,
-          );
-          if (kDebugMode) {
-            debugPrint('Cached video [$dataSource] successfully.');
-          }
-        });
+        // Streams from the network; _scheduleCaching downloads the copy.
+        _cacheMissed = true;
       } else {
         isCacheAvailable = true;
       }
@@ -435,6 +540,7 @@ class CachedVideoPlayerPlus {
       }
 
       _initializationCompleter = initializeCompleter;
+      _scheduleCaching(controller);
       final initializeFuture = controller.initialize();
       checkCompleter.complete(controller);
       onControllerCreate?.call(controller);
@@ -470,6 +576,9 @@ class CachedVideoPlayerPlus {
   /// Call this method when the video player is no longer needed to free up
   /// resources and prevent memory leaks.
   Future<void> dispose() async {
+    _disposed = true;
+    // A copy for the cache still downloading is not needed any more.
+    _stopCaching();
     try {
       final initializationCompleter = _initializationCompleter;
       if (initializationCompleter != null &&

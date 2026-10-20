@@ -33,6 +33,7 @@ dependencies:
   flutter_cache_manager: ^3.4.1
   # TODO(OutdatedGuy): Remove after v6.0.0 migration period
   get_storage: ^2.1.1
+  path_provider: ^2.1.0
   shared_preferences: ^2.5.3
   uuid: ^4.5.1
   video_player: ^2.10.0
